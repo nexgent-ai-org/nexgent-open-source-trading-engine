@@ -8,7 +8,7 @@
 import { BasePriceProvider } from '../../dexscreener/base-price-provider.js';
 import type { TokenPrice } from '../../dexscreener/types.js';
 import { PriceFeedServiceError } from '../../dexscreener/types.js';
-import { PriceService } from '../../pyth/index.js';
+import { SolPriceService, SOL_MINT } from './sol-price-service.js';
 
 /**
  * Jupiter API base URL
@@ -36,7 +36,10 @@ interface JupiterPriceResponse {
  * Jupiter Price Provider
  * 
  * Implements price feed functionality using Jupiter Price API V3
- * Note: Jupiter only provides USD prices, so we convert to SOL using Pyth Network SOL/USD price
+ * Note: Jupiter only provides USD prices, so we convert to SOL using the
+ * SOL/USD price from the same response - SOL is requested alongside the
+ * caller's tokens, so the conversion rate is always consistent with the token
+ * prices it is applied to, and costs no extra request.
  */
 export class JupiterPriceProvider extends BasePriceProvider {
   private readonly baseUrl: string;
@@ -56,13 +59,34 @@ export class JupiterPriceProvider extends BasePriceProvider {
   }
 
   /**
-   * Get SOL/USD price from Pyth Network
-   * 
-   * @returns SOL price in USD
+   * Extract SOL/USD from a Jupiter response and publish it to SolPriceService.
+   *
+   * SOL is included in every batch we send, so the rate used to convert token
+   * prices comes from the same response as those prices. This also keeps the
+   * app-wide SOL price fresh for free: no separate request is made.
+   *
+   * @param response - Jupiter API response that included SOL_MINT
+   * @returns SOL price in USD, or null if absent from the response
    */
-  private getSolUsdPrice(): number {
-    const priceService = PriceService.getInstance();
-    return priceService.getSolPrice();
+  private extractAndPublishSolUsdPrice(response: JupiterPriceResponse): number | null {
+    const solData = response[SOL_MINT]
+      ?? response[Object.keys(response).find(k => k.toLowerCase() === SOL_MINT.toLowerCase()) ?? ''];
+
+    const priceUsd = solData?.usdPrice;
+    if (!Number.isFinite(priceUsd) || priceUsd <= 0) {
+      return null;
+    }
+
+    SolPriceService.getInstance().updateFromPoll(priceUsd);
+    return priceUsd;
+  }
+
+  /**
+   * Ensure SOL is present in a batch of addresses without duplicating it.
+   */
+  private withSolMint(addresses: string[]): string[] {
+    const hasSol = addresses.some(a => a.toLowerCase() === SOL_MINT.toLowerCase());
+    return hasSol ? addresses : [...addresses, SOL_MINT];
   }
 
   /**
@@ -129,7 +153,10 @@ export class JupiterPriceProvider extends BasePriceProvider {
   async getTokenPrice(tokenAddress: string): Promise<TokenPrice> {
     this.validateTokenAddress(tokenAddress);
 
-    const url = `${this.baseUrl}?ids=${encodeURIComponent(tokenAddress)}`;
+    // Request SOL alongside the token so the USD->SOL conversion rate comes
+    // from the same response (and refreshes the app-wide SOL price for free).
+    const ids = this.withSolMint([tokenAddress]).join(',');
+    const url = `${this.baseUrl}?ids=${ids}`;
 
     try {
       const response = await this.executeWithRetry(async () => {
@@ -169,11 +196,11 @@ export class JupiterPriceProvider extends BasePriceProvider {
         throw new Error(`Invalid JSON response from Jupiter: ${parseError instanceof Error ? parseError.message : String(parseError)}`);
       }
 
-      // Get SOL/USD price for conversion
-      const solUsdPrice = this.getSolUsdPrice();
-      if (solUsdPrice <= 0) {
+      // Get SOL/USD price for conversion, from this same response
+      const solUsdPrice = this.extractAndPublishSolUsdPrice(data);
+      if (solUsdPrice === null) {
         throw new PriceFeedServiceError(
-          'Invalid SOL/USD price from Pyth Network',
+          'Jupiter response did not include a usable SOL/USD price',
           'INVALID_SOL_PRICE',
           { tokenAddress }
         );
@@ -236,19 +263,19 @@ export class JupiterPriceProvider extends BasePriceProvider {
     const uniqueAddresses = Array.from(addressMap.values());
     const results: TokenPrice[] = [];
 
-    // Get SOL/USD price once (reuse for all batches)
-    const solUsdPrice = this.getSolUsdPrice();
-    if (solUsdPrice <= 0) {
-      console.error('[Jupiter] Invalid SOL/USD price from Pyth Network, cannot convert prices');
-      return [];
-    }
+    // SOL/USD comes from the batch responses themselves. Carry the most recent
+    // rate across batches so a later batch that somehow lacks SOL can still be
+    // converted.
+    let solUsdPrice: number | null = null;
 
-    // Process in batches of 50 (Jupiter limit)
-    for (let i = 0; i < uniqueAddresses.length; i += MAX_BATCH_SIZE) {
-      const batch = uniqueAddresses.slice(i, i + MAX_BATCH_SIZE);
+    // Process in batches of 50 (Jupiter limit). MAX_BATCH_SIZE - 1 leaves room
+    // for SOL, which is appended to every batch for the conversion rate.
+    const chunkSize = MAX_BATCH_SIZE - 1;
+    for (let i = 0; i < uniqueAddresses.length; i += chunkSize) {
+      const batch = uniqueAddresses.slice(i, i + chunkSize);
       // Join addresses with commas - Jupiter expects comma-separated values
       // Don't encode the entire string, just join with commas
-      const addressesString = batch.join(',');
+      const addressesString = this.withSolMint(batch).join(',');
       const url = `${this.baseUrl}?ids=${addressesString}`;
 
       try {
@@ -285,6 +312,14 @@ export class JupiterPriceProvider extends BasePriceProvider {
           console.error(`[Jupiter] Failed to parse JSON response:`, parseError);
           console.error(`[Jupiter] Full response text:`, responseText);
           throw new Error(`Invalid JSON response from Jupiter: ${parseError instanceof Error ? parseError.message : String(parseError)}`);
+        }
+
+        // Refresh the conversion rate from this response
+        solUsdPrice = this.extractAndPublishSolUsdPrice(data) ?? solUsdPrice;
+
+        if (solUsdPrice === null) {
+          console.error('[Jupiter] No SOL/USD price in response, cannot convert batch prices');
+          continue;
         }
 
         // Process each token in the batch

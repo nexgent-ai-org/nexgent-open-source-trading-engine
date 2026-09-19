@@ -54,6 +54,14 @@ interface TokenTracking {
 class PriceUpdateManager {
   private pollInterval: NodeJS.Timeout | null = null;
   private readonly POLL_INTERVAL = 1500; // 1.5 seconds (reduced to avoid Jupiter rate limits)
+  /**
+   * Slower cadence used when no position tokens are tracked and the only thing
+   * being polled is SOL itself. Keeps the app-wide SOL/USD price fresh without
+   * holding a 1.5s poll open for a single token.
+   */
+  private readonly IDLE_POLL_INTERVAL = 30_000; // 30 seconds
+  /** Cadence the current interval timer was created with. */
+  private currentPollIntervalMs: number | null = null;
   private readonly CACHE_TTL = 2000; // 2 seconds (slightly longer than poll interval)
   private readonly SOL_TOKEN_ADDRESS = 'So11111111111111111111111111111111111111112';
 
@@ -235,11 +243,22 @@ class PriceUpdateManager {
       // Update tracking (keep lastUpdate timestamps where possible)
       this.trackedTokens = newTracking;
 
+      // The map was rebuilt from positions, which does not include SOL - put it
+      // back, then match the poll cadence to whatever is now tracked.
+      this.ensureSolTracked();
+      this.applyPollInterval();
+
       // Remove cached prices for tokens no longer tracked
       for (const tokenAddress of this.priceCache.keys()) {
         if (!this.trackedTokens.has(tokenAddress)) {
           this.priceCache.delete(tokenAddress);
         }
+      }
+
+      // Restore SOL's last-update timestamp, which the rebuild above discarded.
+      const solTracking = this.trackedTokens.get(this.SOL_TOKEN_ADDRESS.toLowerCase());
+      if (solTracking && !solTracking.lastUpdate) {
+        solTracking.lastUpdate = this.priceCache.get(this.SOL_TOKEN_ADDRESS.toLowerCase())?.timestamp ?? null;
       }
     } catch (error) {
       logger.error({
@@ -257,18 +276,78 @@ class PriceUpdateManager {
       return;
     }
 
+    // SOL is always tracked so the app-wide SOL/USD price stays fresh even with
+    // no open positions. When positions exist it rides along in the same batch
+    // request at no extra cost.
+    this.ensureSolTracked();
+
     // Initial refresh of tracked tokens to load existing positions
     logger.info('Loading existing positions for tracking');
     this.refreshTrackedTokens().then(() => {
       logger.info({ tokenCount: this.trackedTokens.size }, 'Loaded tokens to track');
+      this.applyPollInterval();
     });
 
-    // Start polling interval
+    this.applyPollInterval();
+  }
+
+  /**
+   * Add SOL to the tracked set if absent.
+   *
+   * SOL is tracked with no agents: it is polled for its price only, never
+   * broadcast to a client or evaluated for stop loss.
+   */
+  private ensureSolTracked(): void {
+    const normalizedAddress = this.SOL_TOKEN_ADDRESS.toLowerCase();
+    if (this.trackedTokens.has(normalizedAddress)) {
+      return;
+    }
+
+    this.trackedTokens.set(normalizedAddress, {
+      tokenAddress: normalizedAddress,
+      originalTokenAddress: this.SOL_TOKEN_ADDRESS,
+      tokenSymbol: 'SOL',
+      agents: new Set<string>(),
+      lastUpdate: null,
+    });
+  }
+
+  /**
+   * Cadence the poller should currently run at.
+   *
+   * Fast while any position token is tracked; slow when SOL is all that's left.
+   */
+  private desiredPollIntervalMs(): number {
+    const hasPositionTokens = Array.from(this.trackedTokens.values())
+      .some(tracking => tracking.agents.size > 0);
+
+    return hasPositionTokens ? this.POLL_INTERVAL : this.IDLE_POLL_INTERVAL;
+  }
+
+  /**
+   * Create or replace the interval timer when the desired cadence changes.
+   */
+  private applyPollInterval(): void {
+    const desired = this.desiredPollIntervalMs();
+
+    if (this.pollInterval && this.currentPollIntervalMs === desired) {
+      return;
+    }
+
+    if (this.pollInterval) {
+      clearInterval(this.pollInterval);
+      this.pollInterval = null;
+    }
+
     this.pollInterval = setInterval(async () => {
       await this.pollPrices();
-    }, this.POLL_INTERVAL);
+    }, desired);
+    this.currentPollIntervalMs = desired;
 
-    logger.info({ intervalSeconds: this.POLL_INTERVAL / 1000 }, 'Price polling started');
+    logger.info({
+      intervalSeconds: desired / 1000,
+      mode: desired === this.POLL_INTERVAL ? 'active' : 'idle',
+    }, 'Price polling interval set');
   }
 
   /**
@@ -286,7 +365,7 @@ class PriceUpdateManager {
 
     try {
       if (this.trackedTokens.size === 0) {
-        return; // No tokens to poll
+        return; // No tokens to poll (SOL is normally always present)
       }
 
       // Refresh tracked tokens periodically (every 5 polls = 50 seconds)
@@ -483,6 +562,12 @@ class PriceUpdateManager {
 
     // Update tracking timestamp
     tracking.lastUpdate = now;
+
+    // Price-only entries (SOL) have no agents: nothing to evaluate or broadcast,
+    // the value is cached above for USD conversion and that is all it is for.
+    if (tracking.agents.size === 0) {
+      return false;
+    }
 
     // NEW: Evaluate stop loss for all positions with this token
     await this.evaluateStopLossForToken(normalizedAddress, price.priceSol);
@@ -1221,6 +1306,7 @@ class PriceUpdateManager {
     if (this.pollInterval) {
       clearInterval(this.pollInterval);
       this.pollInterval = null;
+      this.currentPollIntervalMs = null;
       logger.info('Price polling stopped');
     }
   }

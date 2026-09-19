@@ -8,7 +8,7 @@
  */
 
 import { Response } from 'express';
-import { PriceService } from '@/infrastructure/external/pyth/index.js';
+import { SolPriceService } from '@/infrastructure/external/jupiter/price/sol-price-service.js';
 import type { AuthenticatedRequest } from '@/middleware/auth.js';
 
 /**
@@ -24,16 +24,17 @@ export async function getSolUsdPrice(req: AuthenticatedRequest, res: Response) {
       });
     }
 
-    const priceService = PriceService.getInstance();
+    const priceService = SolPriceService.getInstance();
     const price = priceService.getSolPrice();
     const lastUpdated = priceService.getLastUpdated();
     const isStale = priceService.isPriceStale();
 
     res.json({
-      price: price.toFixed(8), // Return as string for precision
+      price: price !== null ? price.toFixed(8) : null, // String for precision, null when unknown
       lastUpdated: lastUpdated?.toISOString() || null,
       isStale,
-      source: 'pyth',
+      healthy: priceService.isHealthy(),
+      source: 'jupiter',
     });
   } catch (error) {
     console.error('Get price error:', error);

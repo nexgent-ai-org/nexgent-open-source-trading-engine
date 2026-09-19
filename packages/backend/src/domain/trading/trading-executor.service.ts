@@ -29,7 +29,7 @@ import { idempotencyService } from '@/infrastructure/cache/idempotency-service.j
 import { redisService } from '@/infrastructure/cache/redis-client.js';
 import { REDIS_KEYS, REDIS_TTL } from '@/shared/constants/redis-keys.js';
 import { tokenMetadataService } from '@/infrastructure/external/solana/token-metadata-service.js';
-import { PriceService } from '@/infrastructure/external/pyth/index.js';
+import { SolPriceService } from '@/infrastructure/external/jupiter/price/sol-price-service.js';
 import { positionEventEmitter } from './position-events.js';
 import { extractJupiterFees } from './jupiter-fee-calculator.js';
 import type { OpenPosition } from '@nexgent/shared';
@@ -489,7 +489,7 @@ class TradingExecutor {
 
       // Get transaction value in USD - use total SOL debited when available so value matches wallet
       let transactionValueUsd: number;
-      const solPrice = PriceService.getInstance().getSolPrice();
+      const solPrice = await SolPriceService.getInstance().getSolPriceOrFetch();
       const swapUsdValue = getSwapPayloadNumber(swapResult.swapPayload as Record<string, unknown> | null, 'swapUsdValue');
       if (typeof swapUsdValue === 'number') {
         transactionValueUsd = swapUsdValue;
@@ -1068,7 +1068,7 @@ class TradingExecutor {
         totalSolReceived = solFromTpsNet + netSaleSol;
       }
       const profitLossSol = totalSolReceived - totalInvestedSol;
-      const solPrice = PriceService.getInstance().getSolPrice();
+      const solPrice = await SolPriceService.getInstance().getSolPriceOrFetch();
       const profitLossUsd = profitLossSol * solPrice;
 
       const purchasePrice = position.purchasePrice;
@@ -1535,7 +1535,7 @@ class TradingExecutor {
       const dcaPurchasePrice = inputAmountDecimal.div(outputAmountDecimal).toNumber();
 
       // Get transaction value in USD (use total SOL debited when available)
-      const solPrice = PriceService.getInstance().getSolPrice();
+      const solPrice = await SolPriceService.getInstance().getSolPriceOrFetch();
       const dcaSwapUsdValue = getSwapPayloadNumber(swapResult.swapPayload as Record<string, unknown> | null, 'swapUsdValue');
       const transactionValueUsd = typeof dcaSwapUsdValue === 'number'
         ? dcaSwapUsdValue
@@ -1893,7 +1893,7 @@ class TradingExecutor {
         : 0;
 
       const profitLossSol = tpNetSaleSol - costBasis;
-      const solPrice = PriceService.getInstance().getSolPrice();
+      const solPrice = await SolPriceService.getInstance().getSolPriceOrFetch();
       const profitLossUsd = profitLossSol * solPrice;
       const purchasePrice = position.purchasePrice;
       const changePercent = purchasePrice > 0
