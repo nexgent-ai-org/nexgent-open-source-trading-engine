@@ -82,11 +82,16 @@ export class JupiterPriceProvider extends BasePriceProvider {
   }
 
   /**
-   * Ensure SOL is present in a batch of addresses without duplicating it.
+   * Ensure SOL is present in a batch of addresses, in its canonical casing.
+   *
+   * Jupiter is case-sensitive on mint addresses: a lowercased SOL mint returns
+   * an empty object rather than a price. Callers legitimately pass normalized
+   * (lowercase) addresses, so any case-variant of SOL is replaced with the
+   * canonical form rather than being treated as already present.
    */
   private withSolMint(addresses: string[]): string[] {
-    const hasSol = addresses.some(a => a.toLowerCase() === SOL_MINT.toLowerCase());
-    return hasSol ? addresses : [...addresses, SOL_MINT];
+    const withoutSol = addresses.filter(a => a.toLowerCase() !== SOL_MINT.toLowerCase());
+    return [...withoutSol, SOL_MINT];
   }
 
   /**
