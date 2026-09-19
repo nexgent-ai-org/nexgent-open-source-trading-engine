@@ -15,7 +15,7 @@ import { positionEventEmitter } from '@/domain/trading/position-events.js';
 import { positionService } from '@/domain/trading/position-service.js';
 import { priceFeedService } from '../external/dexscreener/index.js';
 import { redisPriceService } from '../cache/redis-price-service.js';
-import { PriceService } from '../external/pyth/index.js';
+import { SolPriceService } from '@/infrastructure/external/jupiter/price/sol-price-service.js';
 import { prisma } from '../database/client.js';
 import type { OpenPosition } from '@nexgent/shared';
 import logger from '../logging/logger.js';
@@ -338,7 +338,10 @@ class WSServer {
       }
 
       // Step 3: Enrich all positions with prices (no more sequential API calls!)
-      const solPrice = PriceService.getInstance().getSolPrice();
+      // Display path: use the last known price if we have one. A null here means
+      // no price has ever been obtained, in which case USD values are left at 0
+      // rather than computed from a placeholder rate.
+      const solPrice = SolPriceService.getInstance().getSolPrice() ?? 0;
       const enrichedPositions = [];
 
       for (const position of allPositions) {
