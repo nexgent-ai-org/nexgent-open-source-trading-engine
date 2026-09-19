@@ -26,11 +26,12 @@ jest.mock('@/infrastructure/external/jupiter/price/sol-price-service.js', () => 
  * Capture the ids parameter of each outgoing request and reply with a priced
  * entry for every id that was asked for in canonical casing.
  */
-function mockJupiter(requestedIds: string[][]) {
-  global.fetch = jest.fn(async (url: string | URL | Request) => {
+function mockJupiter(requestedIds: string[][], sentHeaders: Record<string, string>[] = []) {
+  global.fetch = jest.fn(async (url: string | URL | Request, init?: RequestInit) => {
     const ids = new URL(String(url)).searchParams.get('ids') ?? '';
     const list = ids.split(',').filter(Boolean);
     requestedIds.push(list);
+    sentHeaders.push((init?.headers ?? {}) as Record<string, string>);
 
     const body: Record<string, unknown> = {};
     for (const id of list) {
@@ -52,11 +53,13 @@ function mockJupiter(requestedIds: string[][]) {
 
 describe('JupiterPriceProvider', () => {
   let requestedIds: string[][];
+  let sentHeaders: Record<string, string>[];
   let provider: JupiterPriceProvider;
 
   beforeEach(() => {
     requestedIds = [];
-    mockJupiter(requestedIds);
+    sentHeaders = [];
+    mockJupiter(requestedIds, sentHeaders);
     provider = new JupiterPriceProvider();
   });
 
@@ -106,6 +109,24 @@ describe('JupiterPriceProvider', () => {
       expect(bonk).toBeDefined();
       expect(bonk!.priceUsd).toBe(0.5);
       expect(bonk!.priceSol).toBe(0.005); // 0.5 USD / 100 USD-per-SOL
+    });
+
+    it('authenticates with the x-api-key header, not a bearer token', async () => {
+      // Jupiter expects a lowercase x-api-key header. Sending Authorization:
+      // Bearer instead is accepted but unauthenticated, silently dropping the
+      // caller to the keyless tier's lower rate limit.
+      const keyed = new JupiterPriceProvider(undefined, 'test-key');
+      await keyed.getMultipleTokenPrices([BONK]);
+
+      expect(sentHeaders[0]['x-api-key']).toBe('test-key');
+      expect(sentHeaders[0]['Authorization']).toBeUndefined();
+    });
+
+    it('sends no key header when none is configured', async () => {
+      const keyless = new JupiterPriceProvider(undefined, '');
+      await keyless.getMultipleTokenPrices([BONK]);
+
+      expect(sentHeaders[0]['x-api-key']).toBeUndefined();
     });
 
     it('returns an empty array for an empty request without calling the API', async () => {

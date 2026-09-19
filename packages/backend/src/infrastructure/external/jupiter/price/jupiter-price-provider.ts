@@ -12,8 +12,14 @@ import { SolPriceService, SOL_MINT } from './sol-price-service.js';
 
 /**
  * Jupiter API base URL
+ *
+ * Defaults to the keyed endpoint, matching the swap and token-metrics providers.
+ * A Jupiter API key is required to run this project, and rate limits are applied
+ * per organisation across Swap, Price and Token requests - so price requests
+ * belong on the same plan as everything else rather than on the keyless bucket,
+ * which allows only 30 requests/minute. Jupiter is also retiring lite-api.jup.ag.
  */
-const JUPITER_API_BASE_URL = process.env.JUPITER_API_URL || 'https://lite-api.jup.ag/price/v3';
+const JUPITER_API_BASE_URL = process.env.JUPITER_API_URL || 'https://api.jup.ag/price/v3';
 
 /**
  * Maximum tokens per batch request
@@ -169,9 +175,11 @@ export class JupiterPriceProvider extends BasePriceProvider {
           'Content-Type': 'application/json',
         };
 
-        // Add API key if available (for Pro tier)
+        // Jupiter authenticates with a lowercase 'x-api-key' header, not a
+        // bearer token - matching the swap and token-metrics providers.
+        // Without it, requests fall back to the keyless tier's lower limit.
         if (this.apiKey) {
-          headers['Authorization'] = `Bearer ${this.apiKey}`;
+          headers['x-api-key'] = this.apiKey;
         }
 
         const res = await fetch(url, {
@@ -289,9 +297,11 @@ export class JupiterPriceProvider extends BasePriceProvider {
             'Content-Type': 'application/json',
           };
 
-          // Add API key if available (for Pro tier)
+          // Jupiter authenticates with a lowercase 'x-api-key' header, not a
+          // bearer token - matching the swap and token-metrics providers.
+          // Without it, requests fall back to the keyless tier's lower limit.
           if (this.apiKey) {
-            headers['Authorization'] = `Bearer ${this.apiKey}`;
+            headers['x-api-key'] = this.apiKey;
           }
 
           const res = await fetch(url, {

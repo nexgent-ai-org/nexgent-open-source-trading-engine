@@ -280,7 +280,7 @@ See `packages/backend/env.example` and `packages/frontend/env.example` for requi
 - `REDIS_HOST` / `REDIS_PORT` - Redis connection
 - `JWT_SECRET` - Backend authentication secret
 - `NEXTAUTH_SECRET` - Frontend authentication secret
-- `JUPITER_API_KEY` - Required for live trading (optional for simulation)
+- `JUPITER_API_KEY` - Required. Used for swaps, token metrics and price data
 
 ## 🔒 Security
 

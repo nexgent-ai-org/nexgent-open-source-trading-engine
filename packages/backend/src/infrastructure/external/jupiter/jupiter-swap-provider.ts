@@ -145,7 +145,7 @@ export class JupiterSwapProvider extends BaseSwapProvider {
           'API_KEY_MISSING',
           {
             endpoint: url.toString(),
-            message: 'The api.jup.ag endpoint requires an API key. Use lite-api.jup.ag for free access without an API key.',
+            message: 'Generate a key at the Jupiter developer portal and set JUPITER_API_KEY.',
           }
         );
       }
