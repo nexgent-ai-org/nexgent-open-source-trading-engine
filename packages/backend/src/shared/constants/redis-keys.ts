@@ -22,7 +22,11 @@ export const REDIS_KEYS = {
   AGENT_AUTOMATED_TRADING: (agentId: string, mode: 'simulation' | 'live') => `agent:${agentId}:automated_trading:${mode}`,
   
   // Price related keys
-  PRICE: (tokenAddress: string) => `price:${tokenAddress}`,
+  // Token addresses are normalized to lowercase so a caller's casing cannot
+  // split one token across two cache entries. Writers use the normalized
+  // address while some readers pass the original mixed-case mint, which
+  // previously meant those reads always missed.
+  PRICE: (tokenAddress: string) => `price:${tokenAddress.toLowerCase()}`,
   
   // Signal related keys
   SIGNAL: (signalId: string) => `signal:${signalId}`,

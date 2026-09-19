@@ -3,7 +3,7 @@
 /**
  * Data Source Connections Component
  * 
- * Displays the status of configured data sources (Pyth Network, Jupiter, etc.)
+ * Displays the status of configured data sources (Jupiter, DexScreener, etc.)
  */
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/shared/components/ui/card';
@@ -38,7 +38,7 @@ export function DataSourceConnections() {
                     <div className="h-10 w-10 rounded-lg bg-gradient-to-br from-primary/20 to-primary/5 flex items-center justify-center border border-primary/20">
                       <TrendingUp className="h-5 w-5 text-primary" />
                     </div>
-                    {dataSources?.pythSolPriceFeed.configured && (
+                    {dataSources?.solPriceFeed.configured && (
                       <div className="absolute -top-1 -right-1 h-3.5 w-3.5 rounded-full bg-green-500 border-2 border-card flex items-center justify-center">
                         <div className="h-1.5 w-1.5 rounded-full bg-white" />
                       </div>
@@ -53,7 +53,7 @@ export function DataSourceConnections() {
                     </p>
                   </div>
                 </div>
-                {dataSources?.pythSolPriceFeed.configured ? (
+                {dataSources?.solPriceFeed.configured ? (
                   <Badge variant="default" className="bg-green-500/10 text-green-600 border-green-500/20">
                     <CheckCircle2 className="mr-1.5 h-3 w-3" />
                     Connected
@@ -72,10 +72,10 @@ export function DataSourceConnections() {
                       <Zap className="h-3.5 w-3.5 text-primary" />
                     </div>
                     <div>
-                      <p className="text-sm font-medium">Pyth Network</p>
+                      <p className="text-sm font-medium">Jupiter</p>
                     </div>
                   </div>
-                  {dataSources?.pythNetwork.configured ? (
+                  {dataSources?.solPriceFeed.configured ? (
                     <div className="flex items-center gap-1.5 text-green-600">
                       <CheckCircle2 className="h-3.5 w-3.5" />
                       <span className="text-xs font-medium">Active</span>

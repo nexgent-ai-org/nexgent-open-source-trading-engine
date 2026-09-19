@@ -94,8 +94,17 @@ export async function listAgentBalances(req: AuthenticatedRequest, res: Response
     const priceMap = new Map<string, number>(); // tokenAddress -> priceSol
     
     if (balances.length > 0) {
-      // Collect unique token addresses
-      const tokenAddresses = [...new Set(balances.map(b => b.tokenAddress.toLowerCase()))];
+      // Collect unique token addresses, keeping the original casing alongside the
+      // normalized form. Cache keys and lookups use the normalized address, but
+      // the price API is case-sensitive on mints and needs the original.
+      const addressCasing = new Map<string, string>();
+      for (const balance of balances) {
+        const normalized = balance.tokenAddress.toLowerCase();
+        if (!addressCasing.has(normalized)) {
+          addressCasing.set(normalized, balance.tokenAddress);
+        }
+      }
+      const tokenAddresses = [...addressCasing.keys()];
       const startTime = Date.now();
 
       // Step 1: Try to get all prices from Redis cache (FAST - no network call)
@@ -119,7 +128,9 @@ export async function listAgentBalances(req: AuthenticatedRequest, res: Response
       if (missingTokens.length > 0) {
         try {
           console.log(`[AgentBalances] 🌐 Fetching ${missingTokens.length} missing prices from API...`);
-          const prices = await priceFeedService.getMultipleTokenPrices(missingTokens);
+          const prices = await priceFeedService.getMultipleTokenPrices(
+            missingTokens.map(address => addressCasing.get(address) ?? address)
+          );
           for (const price of prices) {
             priceMap.set(price.tokenAddress.toLowerCase(), price.priceSol);
           }

@@ -17,10 +17,7 @@ import type { AuthenticatedRequest } from '@/middleware/auth.js';
  * Does not expose actual URLs, API keys, or other sensitive configuration values.
  */
 export interface DataSourceStatusResponse {
-  pythNetwork: {
-    configured: boolean;
-  };
-  pythSolPriceFeed: {
+  solPriceFeed: {
     configured: boolean;
   };
   jupiter: {
@@ -44,8 +41,7 @@ export interface DataSourceStatusResponse {
  * Only returns boolean flags indicating if each data source is configured.
  * 
  * Returns: { 
- *   pythNetwork: { configured: boolean },
- *   pythSolPriceFeed: { configured: boolean },
+ *   solPriceFeed: { configured: boolean },
  *   jupiter: { configured: boolean },
  *   dexscreener: { configured: boolean },
  * }
@@ -62,15 +58,14 @@ export async function getDataSourceStatus(
     }
 
     // Check environment variables (without exposing their values)
-    // Note: Pyth and DexScreener URLs are hardcoded, so always configured
+    // Note: Jupiter and DexScreener URLs are hardcoded, so always configured
     const jupiterApiKey = process.env.JUPITER_API_KEY;
 
     const response: DataSourceStatusResponse = {
-      pythNetwork: {
-        configured: true, // Hardcoded URL
-      },
-      pythSolPriceFeed: {
-        configured: true, // Hardcoded feed ID
+      solPriceFeed: {
+        // SOL/USD is served by Jupiter, whose free tier needs no API key.
+        // Previously Pyth, which now requires a paid key and returns 401.
+        configured: true,
       },
       jupiter: {
         configured: !!jupiterApiKey,

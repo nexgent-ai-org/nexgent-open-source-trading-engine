@@ -12,7 +12,7 @@ import { prisma } from '@/infrastructure/database/client.js';
 import type { AuthenticatedRequest } from '@/middleware/auth.js';
 import { positionService } from '@/domain/trading/position-service.js';
 import { priceFeedService } from '@/infrastructure/external/dexscreener/index.js';
-import { PriceService } from '@/infrastructure/external/pyth/index.js';
+import { SolPriceService } from '@/infrastructure/external/jupiter/price/sol-price-service.js';
 import type { PositionResponse } from '../types.js';
 import type { OpenPosition } from '@nexgent/shared';
 
@@ -159,8 +159,10 @@ export async function getAgentPositions(req: AuthenticatedRequest, res: Response
       }
     }
 
-    // Get SOL/USD price for conversions (used for all positions)
-    const solPrice = PriceService.getInstance().getSolPrice();
+    // Get SOL/USD price for conversions (used for all positions).
+    // Throws if no trustworthy price is available - handled by the catch below,
+    // which is preferable to rendering USD figures derived from a guess.
+    const solPrice = await SolPriceService.getInstance().getSolPriceOrFetch();
 
     // Second pass: Enrich positions with prices
     const positions: PositionResponse[] = [];

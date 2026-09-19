@@ -40,12 +40,17 @@ jest.mock('@/infrastructure/external/solana/token-metadata-service.js', () => ({
   },
 }));
 
-jest.mock('@/infrastructure/external/pyth/index.js', () => ({
-  PriceService: {
+jest.mock('@/infrastructure/external/jupiter/price/sol-price-service.js', () => ({
+  SolPriceService: {
     getInstance: jest.fn(() => ({
+      getSolPriceOrFetch: jest.fn().mockResolvedValue(100), // $100 per SOL
       getSolPrice: jest.fn().mockReturnValue(100),
+      isPriceStale: jest.fn().mockReturnValue(false),
+      isHealthy: jest.fn().mockReturnValue(true),
+      updateFromPoll: jest.fn(),
     })),
   },
+  SOL_MINT: 'So11111111111111111111111111111111111111112',
 }));
 
 // Mock queue to avoid real job processing

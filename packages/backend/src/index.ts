@@ -111,7 +111,7 @@ import helmet from 'helmet';
 import cors from 'cors';
 import apiRoutes from './api/index.js';
 import { prisma } from './infrastructure/database/client.js';
-import { PriceService } from './infrastructure/external/pyth/index.js';
+import { SolPriceService } from '@/infrastructure/external/jupiter/price/sol-price-service.js';
 import { wsServer } from './infrastructure/websocket/server.js';
 import { priceUpdateManager } from './domain/prices/index.js';
 import { initializeAutoTradeReentryManager, shutdownAutoTradeReentryManager } from './domain/trading/auto-trade-reentry-manager.service.js';
@@ -257,8 +257,9 @@ async function startServer() {
     console.log('✅ Signal Processor initialized:', signalProcessor ? 'Yes' : 'No');
     console.log('✅ Signal Processor listening for signal_created events');
 
-    // Initialize price service
-    const priceService = PriceService.getInstance();
+    // Initialize SOL price service (Jupiter-backed).
+    // Never throws: a degraded price service must not block startup.
+    const priceService = SolPriceService.getInstance();
     await priceService.initialize();
 
     // Initialize token metadata service
@@ -426,7 +427,7 @@ function setupGracefulShutdown() {
 
       // Shutdown price service
       try {
-        const priceService = PriceService.getInstance();
+        const priceService = SolPriceService.getInstance();
         priceService.shutdown();
       } catch (error) {
         console.error('❌ Error shutting down price service:', error);
