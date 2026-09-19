@@ -94,7 +94,7 @@ export default function PerformanceOverviewPage() {
   // Only evaluate after loading is complete to prevent flash of incorrect state
   const isMissingRequiredDataSources = 
     !isLoadingDataSources && 
-    (!dataSources?.jupiter.configured || !dataSources?.pythNetwork.configured);
+    (!dataSources?.jupiter.configured || !dataSources?.solPriceFeed.configured);
 
   // Calculate display values based on currency preference
   const portfolioBalance = currencyPreference === 'USD'
@@ -222,7 +222,7 @@ export default function PerformanceOverviewPage() {
 
   return (
     <div className="flex flex-col gap-4 px-4 py-6">
-      {/* No Data Source Connected Alert - Only show if Jupiter or Pyth Network is missing */}
+      {/* No Data Source Connected Alert - Only show if Jupiter or the SOL price feed is missing */}
       {isMissingRequiredDataSources && (
         <div className="flex justify-between items-start">
           <Alert className="inline-flex w-fit border-[#16B364] bg-[#16B364]/10 text-[#16B364]">

@@ -16,10 +16,7 @@ import { extractErrorFromResponse } from '../client/error-handler';
  * Actual URLs, API keys, and other sensitive values are not exposed.
  */
 export interface DataSourceStatus {
-  pythNetwork: {
-    configured: boolean;
-  };
-  pythSolPriceFeed: {
+  solPriceFeed: {
     configured: boolean;
   };
   jupiter: {

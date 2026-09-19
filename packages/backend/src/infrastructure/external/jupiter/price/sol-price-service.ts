@@ -106,9 +106,7 @@ export class SolPriceService {
     console.log('📊 Initializing SOL price service (Jupiter)...');
 
     try {
-      // PriceUpdateManager writes cache entries under the normalized (lowercase)
-      // address, and REDIS_KEYS.PRICE does not normalize, so read it that way.
-      const cached = await redisPriceService.getPrice(SOL_MINT.toLowerCase());
+      const cached = await redisPriceService.getPrice(SOL_MINT);
       if (cached?.priceUsd && cached.priceUsd > 0) {
         this.solPrice = cached.priceUsd;
         this.lastUpdated = cached.lastUpdated ? new Date(cached.lastUpdated) : new Date();
