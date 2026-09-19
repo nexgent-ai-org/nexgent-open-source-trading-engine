@@ -175,9 +175,11 @@ export class JupiterPriceProvider extends BasePriceProvider {
           'Content-Type': 'application/json',
         };
 
-        // Add API key if available (for Pro tier)
+        // Jupiter authenticates with a lowercase 'x-api-key' header, not a
+        // bearer token - matching the swap and token-metrics providers.
+        // Without it, requests fall back to the keyless tier's lower limit.
         if (this.apiKey) {
-          headers['Authorization'] = `Bearer ${this.apiKey}`;
+          headers['x-api-key'] = this.apiKey;
         }
 
         const res = await fetch(url, {
@@ -295,9 +297,11 @@ export class JupiterPriceProvider extends BasePriceProvider {
             'Content-Type': 'application/json',
           };
 
-          // Add API key if available (for Pro tier)
+          // Jupiter authenticates with a lowercase 'x-api-key' header, not a
+          // bearer token - matching the swap and token-metrics providers.
+          // Without it, requests fall back to the keyless tier's lower limit.
           if (this.apiKey) {
-            headers['Authorization'] = `Bearer ${this.apiKey}`;
+            headers['x-api-key'] = this.apiKey;
           }
 
           const res = await fetch(url, {

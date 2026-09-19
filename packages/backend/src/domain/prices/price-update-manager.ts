@@ -472,7 +472,20 @@ class PriceUpdateManager {
       // Log tokens that failed to fetch (if any)
       // Normalize addresses to lowercase for comparison
       const fetchedAddresses = new Set(prices.map(p => p.tokenAddress.toLowerCase()));
-      const failedAddresses = tokenAddresses.filter(addr => !fetchedAddresses.has(addr.toLowerCase()));
+      const solAddress = this.SOL_TOKEN_ADDRESS.toLowerCase();
+      const failedAddresses = tokenAddresses.filter(addr => {
+        const normalized = addr.toLowerCase();
+
+        // SOL is tracked for its price only and is never a position token. It
+        // has no DexScreener pair of its own, so putting it through the
+        // liquidity check below would classify it as rug pulled whenever a
+        // price fetch fails - for example on a rate-limit error.
+        if (normalized === solAddress) {
+          return false;
+        }
+
+        return !fetchedAddresses.has(normalized);
+      });
 
       if (failedAddresses.length > 0) {
         priceUpdateCount.inc({ source: 'dexscreener', status: 'partial' });

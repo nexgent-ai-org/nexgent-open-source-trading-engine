@@ -241,9 +241,10 @@ export class SolPriceService {
     const url = `${JUPITER_API_BASE_URL}?ids=${SOL_MINT}`;
     const headers: Record<string, string> = { 'Content-Type': 'application/json' };
 
-    // Pro tier key, when configured - same variable JupiterPriceProvider uses.
+    // Jupiter authenticates with a lowercase 'x-api-key' header, not a bearer
+    // token. Without it, requests fall back to the keyless tier's lower limit.
     if (process.env.JUPITER_API_KEY) {
-      headers['Authorization'] = `Bearer ${process.env.JUPITER_API_KEY}`;
+      headers['x-api-key'] = process.env.JUPITER_API_KEY;
     }
 
     try {
