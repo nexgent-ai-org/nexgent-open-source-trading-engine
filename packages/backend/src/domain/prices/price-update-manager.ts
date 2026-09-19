@@ -51,18 +51,68 @@ interface TokenTracking {
  * 
  * Singleton service for managing price updates for active positions.
  */
+/**
+ * Default cadence for price polling while positions are open.
+ *
+ * At 1.5s this is roughly 40 requests/minute, which fits inside Jupiter's Free
+ * tier (60/min) but exceeds the keyless tier (30/min). Operators on a different
+ * plan can tune it with PRICE_POLL_INTERVAL_MS. Rate limits are applied per
+ * organisation across Swap, Price and Token requests, so leave headroom for
+ * swaps (2 requests each) and the market-cap monitor (~2/min).
+ */
+const DEFAULT_POLL_INTERVAL_MS = 1500;
+
+/** Bounds for the configured interval - below 500ms will exhaust any plan. */
+const MIN_POLL_INTERVAL_MS = 500;
+const MAX_POLL_INTERVAL_MS = 60_000;
+
+/**
+ * Read the poll interval from the environment, falling back to the default when
+ * unset or unusable. An invalid value is logged rather than silently accepted -
+ * a typo here quietly changes how fast stop losses are evaluated.
+ */
+function resolvePollIntervalMs(): number {
+  const raw = process.env.PRICE_POLL_INTERVAL_MS;
+
+  if (!raw) {
+    return DEFAULT_POLL_INTERVAL_MS;
+  }
+
+  const parsed = Number(raw);
+
+  if (!Number.isFinite(parsed) || !Number.isInteger(parsed)) {
+    logger.warn(
+      { value: raw, fallbackMs: DEFAULT_POLL_INTERVAL_MS },
+      'PRICE_POLL_INTERVAL_MS is not an integer, using default'
+    );
+    return DEFAULT_POLL_INTERVAL_MS;
+  }
+
+  if (parsed < MIN_POLL_INTERVAL_MS || parsed > MAX_POLL_INTERVAL_MS) {
+    logger.warn(
+      { value: parsed, minMs: MIN_POLL_INTERVAL_MS, maxMs: MAX_POLL_INTERVAL_MS, fallbackMs: DEFAULT_POLL_INTERVAL_MS },
+      'PRICE_POLL_INTERVAL_MS is outside the supported range, using default'
+    );
+    return DEFAULT_POLL_INTERVAL_MS;
+  }
+
+  return parsed;
+}
+
 class PriceUpdateManager {
   private pollInterval: NodeJS.Timeout | null = null;
-  private readonly POLL_INTERVAL = 1500; // 1.5 seconds (reduced to avoid Jupiter rate limits)
+  /** Active cadence, from PRICE_POLL_INTERVAL_MS (default 1.5s). */
+  private readonly POLL_INTERVAL = resolvePollIntervalMs();
   /**
    * Slower cadence used when no position tokens are tracked and the only thing
    * being polled is SOL itself. Keeps the app-wide SOL/USD price fresh without
-   * holding a 1.5s poll open for a single token.
+   * holding the active poll open for a single token.
    */
   private readonly IDLE_POLL_INTERVAL = 30_000; // 30 seconds
   /** Cadence the current interval timer was created with. */
   private currentPollIntervalMs: number | null = null;
-  private readonly CACHE_TTL = 2000; // 2 seconds (slightly longer than poll interval)
+  /** Slightly longer than the poll interval, so a poll never races its own cache. */
+  private readonly CACHE_TTL = this.POLL_INTERVAL + 500;
   private readonly SOL_TOKEN_ADDRESS = 'So11111111111111111111111111111111111111112';
 
   // Guard to prevent concurrent polling
