@@ -28,7 +28,7 @@ export const SOL_MINT = 'So11111111111111111111111111111111111111112';
 /**
  * Jupiter Price API V3 base URL (shared with JupiterPriceProvider).
  */
-const JUPITER_API_BASE_URL = process.env.JUPITER_API_URL || 'https://lite-api.jup.ag/price/v3';
+const JUPITER_API_BASE_URL = process.env.JUPITER_API_URL || 'https://api.jup.ag/price/v3';
 
 /**
  * Age beyond which the in-memory price is considered stale.

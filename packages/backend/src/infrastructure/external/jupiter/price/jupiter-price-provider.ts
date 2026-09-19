@@ -12,8 +12,14 @@ import { SolPriceService, SOL_MINT } from './sol-price-service.js';
 
 /**
  * Jupiter API base URL
+ *
+ * Defaults to the keyed endpoint, matching the swap and token-metrics providers.
+ * A Jupiter API key is required to run this project, and rate limits are applied
+ * per organisation across Swap, Price and Token requests - so price requests
+ * belong on the same plan as everything else rather than on the keyless bucket,
+ * which allows only 30 requests/minute. Jupiter is also retiring lite-api.jup.ag.
  */
-const JUPITER_API_BASE_URL = process.env.JUPITER_API_URL || 'https://lite-api.jup.ag/price/v3';
+const JUPITER_API_BASE_URL = process.env.JUPITER_API_URL || 'https://api.jup.ag/price/v3';
 
 /**
  * Maximum tokens per batch request
