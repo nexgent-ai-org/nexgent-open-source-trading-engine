@@ -9,7 +9,7 @@ applications:
           commands:
             # Install pnpm (required for pnpm monorepos)
             - corepack enable
-            - corepack prepare pnpm@8.15.0 --activate
+            - corepack prepare pnpm@8.15.9 --activate
             # Install all dependencies from root
             # .npmrc with node-linker=hoisted creates traditional node_modules
             - pnpm install --frozen-lockfile
